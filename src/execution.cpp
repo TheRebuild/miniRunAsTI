@@ -18,10 +18,13 @@ std::optional<Error> EnablePrivilege(const std::wstring &privilegeName)
     if (!pfnLookupPrivilegeValueW(nullptr, privilegeName.c_str(), &luid))
         return Error{GetLastError(), L"LookupPrivilegeValueW failed"};
 
-    TOKEN_PRIVILEGES tp;
-    tp.PrivilegeCount = 1;
-    tp.Privileges[0].Luid = luid;
-    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    TOKEN_PRIVILEGES tp{
+        .PrivilegeCount = 1,
+        .Privileges = {{
+            .Luid = luid,
+            .Attributes = SE_PRIVILEGE_ENABLED,
+        }},
+    };
 
     if (!pfnAdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), nullptr, nullptr))
         return Error{GetLastError(), L"AdjustTokenPrivileges failed for self"};
@@ -53,7 +56,7 @@ std::optional<Error> EnablePrivilegesOnToken(HANDLE hToken, const std::vector<st
         p_tp->Privileges[i].Attributes = SE_PRIVILEGE_ENABLED;
     }
 
-    if (!pfnAdjustTokenPrivileges(hToken, FALSE, p_tp, (DWORD)tp_size, nullptr, nullptr))
+    if (!pfnAdjustTokenPrivileges(hToken, FALSE, p_tp, static_cast<DWORD>(tp_size), nullptr, nullptr))
         return Error{GetLastError(), L"AdjustTokenPrivileges failed for token"};
     return std::nullopt;
 }
@@ -109,7 +112,7 @@ std::optional<Error> ImpersonateSystem(std::optional<ScopeGuard> &impersonationG
         return Error{GetLastError(), L"SetThreadToken failed."};
     }
 
-    impersonationGuard.emplace([hImpersonationToken]() {
+    impersonationGuard.emplace([hImpersonationToken] {
         pfnSetThreadToken(nullptr, nullptr);
         CloseHandle(hImpersonationToken);
     });
@@ -128,9 +131,7 @@ std::optional<Error> RunAsUserWithToken(HANDLE hToken, const std::vector<std::ws
     if (!pfnSetTokenInformation(hToken, TokenSessionId, &consoleSessionId, sizeof(DWORD)))
         return Error{GetLastError(), L"SetTokenInformation failed"};
 
-    STARTUPINFOW si = {sizeof(si)};
-
-    si.lpDesktop = const_cast<LPWSTR>(L"winsta0\\default");
+    STARTUPINFOW si = {.cb = sizeof(si), .lpDesktop = const_cast<LPWSTR>(L"winsta0\\default")};
 
     PROCESS_INFORMATION pi = {};
     std::wstring commandLine = JoinCommandArgs(command);
@@ -203,8 +204,10 @@ std::optional<Error> RunAsTi(const std::vector<std::wstring> &command)
     DWORD bytesNeeded;
     for (auto i = 0; i < 10; ++i)
     {
-        if (!pfnQueryServiceStatusEx(hService, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof(ssp), &bytesNeeded))
+        if (!pfnQueryServiceStatusEx(hService, SC_STATUS_PROCESS_INFO, reinterpret_cast<LPBYTE>(&ssp), sizeof(ssp),
+                                     &bytesNeeded))
             return Error{GetLastError(), L"QueryServiceStatusEx failed."};
+
         if (ssp.dwCurrentState == SERVICE_RUNNING)
             break;
 
@@ -214,6 +217,7 @@ std::optional<Error> RunAsTi(const std::vector<std::wstring> &command)
 
         Sleep(500);
     }
+
     if (ssp.dwCurrentState != SERVICE_RUNNING)
         return Error{0, L"TrustedInstaller service failed to start."};
 
@@ -244,12 +248,14 @@ std::optional<Error> RunElevated(const std::vector<std::wstring> &command)
         params = JoinCommandArgs(args);
     }
 
-    SHELLEXECUTEINFOW sei = {sizeof(sei)};
-    sei.fMask = SEE_MASK_NOCLOSEPROCESS;
-    sei.lpVerb = L"runas";
-    sei.lpFile = file.c_str();
-    sei.lpParameters = params.empty() ? nullptr : params.c_str();
-    sei.nShow = SW_SHOWNORMAL;
+    SHELLEXECUTEINFOW sei = {
+        .cbSize = sizeof(sei),
+        .fMask = SEE_MASK_NOCLOSEPROCESS,
+        .lpVerb = L"runas",
+        .lpFile = file.c_str(),
+        .lpParameters = params.empty() ? nullptr : params.c_str(),
+        .nShow = SW_SHOWNORMAL,
+    };
 
     if (!pfnShellExecuteExW(&sei))
         return Error{GetLastError(), L"ShellExecuteExW failed."};
@@ -297,8 +303,8 @@ std::optional<Error> RunAsNormalUser(const std::vector<std::wstring> &command)
             return Error{GetLastError(), L"CreateEnvironmentBlock failed."};
         ScopeGuard environmentGuard([&] { pfnDestroyEnvironmentBlock(lpEnvironment); });
 
-        STARTUPINFOW si = {sizeof(si)};
-        si.lpDesktop = const_cast<LPWSTR>(L"winsta0\\default");
+        STARTUPINFOW si = {.cb = sizeof(si), .lpDesktop = const_cast<LPWSTR>(L"winsta0\\default")};
+
         PROCESS_INFORMATION pi = {};
         if (!pfnCreateProcessAsUserW(hPrimaryToken, nullptr, runas_command_line.data(), nullptr, nullptr, FALSE,
                                      CREATE_NEW_CONSOLE | CREATE_UNICODE_ENVIRONMENT, lpEnvironment, nullptr, &si, &pi))
@@ -334,8 +340,8 @@ std::optional<Error> RunAsNormalUser(const std::vector<std::wstring> &command)
 
             ScopeGuard restrictedTokenGuard([&] { CloseHandle(hRestrictedToken); });
 
-            STARTUPINFOW si = {sizeof(si)};
-            si.lpDesktop = const_cast<LPWSTR>(L"winsta0\\default");
+            STARTUPINFOW si = {.cb = sizeof(si), .lpDesktop = const_cast<LPWSTR>(L"winsta0\\default")};
+
             PROCESS_INFORMATION pi = {};
 
             std::wstring commandLine = JoinCommandArgs(command);
@@ -352,12 +358,14 @@ std::optional<Error> RunAsNormalUser(const std::vector<std::wstring> &command)
         std::wcout << L"[?] LUA is disabled, Using runas directly..." << std::endl;
 
         std::wstring params = L"/trustlevel:0x20000 " + JoinCommandArgs(command);
-        SHELLEXECUTEINFOW sei = {sizeof(sei)};
-        sei.fMask = SEE_MASK_NOCLOSEPROCESS;
-        sei.lpVerb = L"open";
-        sei.lpFile = L"runas.exe";
-        sei.lpParameters = params.c_str();
-        sei.nShow = SW_SHOWNORMAL;
+        SHELLEXECUTEINFOW sei = {
+            .cbSize = sizeof(sei),
+            .fMask = SEE_MASK_NOCLOSEPROCESS,
+            .lpVerb = L"open",
+            .lpFile = L"runas.exe",
+            .lpParameters = params.c_str(),
+            .nShow = SW_SHOWNORMAL,
+        };
 
         if (!pfnShellExecuteExW(&sei))
             return Error{GetLastError(), L"ShellExecuteExW with runas failed."};
@@ -369,4 +377,88 @@ std::optional<Error> RunAsNormalUser(const std::vector<std::wstring> &command)
 
     err->message = L"[-] Failed to enable SeTcbPrivilege. " + err->message;
     return err;
+}
+
+std::optional<Error> RunAsWinDeploy(const wchar_t *appname, const std::vector<std::wstring> &command)
+{
+    if (!isRunningAsAdmin())
+        return Error{ERROR_ACCESS_DENIED, L"[-] Not running as administrator."};
+
+    std::wcout << L"[+] Getting SYSTEM access" << std::endl;
+    std::optional<ScopeGuard> impersonationGuard;
+    if (auto err = ImpersonateSystem(impersonationGuard))
+    {
+        err->message = L"Failed to elevate to SYSTEM. " + err->message;
+        return err;
+    }
+    std::wcout << L"[+] Granted. Now writing registry..." << std::endl;
+
+    const auto isUndoCommand = (command.size() == 1 && command[0] == L"undo");
+
+    HKEY hKey;
+    LSTATUS status = pfnRegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\Setup", 0, KEY_SET_VALUE, &hKey);
+
+    if (status != ERROR_SUCCESS)
+    {
+        return Error{static_cast<DWORD>(status),
+                     L"RegOpenKeyExW for HKLM\\SYSTEM\\Setup failed while running as SYSTEM."};
+    }
+
+    ScopeGuard keyGuard([&] { pfnRegCloseKey(hKey); });
+
+    if (isUndoCommand)
+    {
+        constexpr DWORD setupTypeValue = 0;
+
+        status = pfnRegSetValueExW(hKey, L"SetupType", 0, REG_DWORD, reinterpret_cast<const BYTE *>(&setupTypeValue),
+                                   sizeof(setupTypeValue));
+        if (status != ERROR_SUCCESS)
+        {
+            return Error{static_cast<DWORD>(status), L"Failed to reset SetupType to 0."};
+        }
+
+        const DWORD cmdLineDataSize = static_cast<DWORD>(wcslen(L"") + 1) * sizeof(wchar_t);
+        status = pfnRegSetValueExW(hKey, L"CmdLine", 0, REG_SZ, reinterpret_cast<const BYTE *>(L""), cmdLineDataSize);
+        if (status != ERROR_SUCCESS)
+        {
+            return Error{static_cast<DWORD>(status), L"Failed to clear CmdLine."};
+        }
+
+        std::wcout << L"[SUCCESS] WinDeploy command has been undone. System will boot normally." << std::endl;
+    }
+    else
+    {
+        const std::wstring fullCommand = JoinCommandArgs(command);
+        constexpr DWORD setupTypeValue = 2;
+
+        const DWORD dataSize = static_cast<DWORD>(fullCommand.length() + 1) * sizeof(wchar_t);
+        status = pfnRegSetValueExW(hKey, L"CmdLine", 0, REG_SZ, reinterpret_cast<const BYTE *>(fullCommand.c_str()),
+                                   dataSize);
+        if (status != ERROR_SUCCESS)
+        {
+            return Error{static_cast<DWORD>(status), L"RegSetValueExW for CmdLine failed while running as SYSTEM."};
+        }
+
+        status = pfnRegSetValueExW(hKey, L"SetupType", 0, REG_DWORD, reinterpret_cast<const BYTE *>(&setupTypeValue),
+                                   sizeof(setupTypeValue));
+        if (status != ERROR_SUCCESS)
+        {
+            return Error{static_cast<DWORD>(status), L"RegSetValueExW for SetupType failed."};
+        }
+
+        std::wcout << L"[SUCCESS] Next boot will run command `" << fullCommand << "` with SYSTEM rights" << std::endl;
+        std::wcout << L"--------------------------------------------------------------------------------" << std::endl;
+        std::wcout << L"[WARNING]" << std::endl;
+        std::wcout << L"The registry change for WinDeploy is persistent and will NOT be cleared automatically."
+                   << std::endl;
+        std::wcout << L"To ensure your system boots normally in the future and to prevent the command" << std::endl;
+        std::wcout << L"from running again, you MUST undo this change after your task is complete." << std::endl;
+        std::wcout << L"" << std::endl;
+        std::wcout << L"To undo, run this from an administrative command prompt on your desktop:" << std::endl;
+        std::wcout << std::format(L"  {} -u windeploy undo", appname) << std::endl;
+        std::wcout << L"--------------------------------------------------------------------------------" << std::endl;
+        return std::nullopt;
+    }
+
+    return std::nullopt;
 }

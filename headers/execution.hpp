@@ -5,3 +5,4 @@ std::optional<Error> RunElevated(const std::vector<std::wstring> &command);
 std::optional<Error> RunAsSystem(const std::vector<std::wstring> &command);
 std::optional<Error> RunAsTi(const std::vector<std::wstring> &command);
 std::optional<Error> RunAsNormalUser(const std::vector<std::wstring> &command);
+std::optional<Error> RunAsWinDeploy(const wchar_t *appname, const std::vector<std::wstring> &command);
