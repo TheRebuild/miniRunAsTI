@@ -20,6 +20,7 @@ PFN_SaferComputeTokenFromLevel pfnSaferComputeTokenFromLevel = nullptr;
 PFN_SaferCloseLevel pfnSaferCloseLevel = nullptr;
 PFN_RegOpenKeyExW pfnRegOpenKeyExW = nullptr;
 PFN_RegQueryValueExW pfnRegQueryValueExW = nullptr;
+PFN_RegSetValueExW pfnRegSetValueExW = nullptr;
 PFN_RegCloseKey pfnRegCloseKey = nullptr;
 
 // Shell32

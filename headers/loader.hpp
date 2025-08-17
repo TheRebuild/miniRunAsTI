@@ -1,5 +1,6 @@
 #pragma once
 #include "pch.hpp"
+#include "winsafer.h"
 
 // Required functions (loaded dynamically)
 using PFN_OpenProcessToken = BOOL(WINAPI *)(HANDLE, DWORD, PHANDLE);
@@ -31,6 +32,7 @@ using PFN_DestroyEnvironmentBlock = BOOL(WINAPI *)(LPVOID);
 
 using PFN_RegOpenKeyExW = LSTATUS(WINAPI *)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY);
 using PFN_RegQueryValueExW = LSTATUS(WINAPI *)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
+using PFN_RegSetValueExW = LSTATUS(WINAPI *)(HKEY, LPCSTR, DWORD, DWORD, const BYTE *, DWORD);
 using PFN_RegCloseKey = LSTATUS(WINAPI *)(HKEY);
 
 extern PFN_OpenProcessToken pfnOpenProcessToken;
@@ -59,6 +61,7 @@ extern PFN_SaferCloseLevel pfnSaferCloseLevel;
 extern PFN_RegOpenKeyExW pfnRegOpenKeyExW;
 extern PFN_RegQueryValueExW pfnRegQueryValueExW;
 extern PFN_RegCloseKey pfnRegCloseKey;
+extern PFN_RegSetValueExW pfnRegSetValueExW;
 
 extern PFN_CreateEnvironmentBlock pfnCreateEnvironmentBlock;
 extern PFN_DestroyEnvironmentBlock pfnDestroyEnvironmentBlock;
