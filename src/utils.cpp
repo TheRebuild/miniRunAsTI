@@ -76,11 +76,13 @@ void PrintUsage(const wchar_t *appname)
                << L"  user         - As an current (limited) user.\n"
                << L"  elevated     - As an administrator (shows UAC prompt).\n"
                << L"  system       - As the NT AUTHORITY\\SYSTEM user.\n"
-               << L"  ti           - As the TrustedInstaller user.\n\n"
+               << L"  ti           - As the TrustedInstaller user.\n"
+               << L"  windeploy    - Run specified command on WinDeploy on next boot.\n\n"
                << L"Examples:\n"
                << L"  " << appname << L" -u elevated cmd.exe\n"
                << L"  " << appname << L" -u system powershell.exe -c whoami\n"
                << L"  " << appname << L" -u ti regedit.exe\n"
+               << L"  " << appname << L" -u windeploy cmd.exe\n"
                << std::format(
                       L"\n\nSource Code: https://github.com/TheRebuild/miniRunAsTI\n(c) TheRebuild, nixxoq - {}",
                       ymd.year());
