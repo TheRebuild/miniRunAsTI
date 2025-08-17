@@ -82,6 +82,7 @@ bool LoadApiFunctions()
 
     LOAD_FUNCTION(advapi32, pfnRegOpenKeyExW, PFN_RegOpenKeyExW, "RegOpenKeyExW");
     LOAD_FUNCTION(advapi32, pfnRegQueryValueExW, PFN_RegQueryValueExW, "RegQueryValueExW");
+    LOAD_FUNCTION(advapi32, pfnRegSetValueExW, PFN_RegSetValueExW, "RegSetValueExW");
     LOAD_FUNCTION(advapi32, pfnRegCloseKey, PFN_RegCloseKey, "RegCloseKey");
 
     HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
